@@ -1,6 +1,6 @@
 import { ClientFactory } from "@a2a-js/sdk/client";
-import type { Message, MessageSendParams } from "@a2a-js/sdk";
 import { v4 as uuidv4 } from "uuid";
+import type { MessageSendParams } from "@a2a-js/sdk";
 
 const A2A_BACKEND_URL = "http://localhost:9999";
 
@@ -14,11 +14,38 @@ function getClient() {
   return clientPromise;
 }
 
-export async function sendMessage(query: string): Promise<string> {
+export interface StreamCallbacks {
+  onTextChunk: (text: string) => void;
+  onToolCall: (toolName: string) => void;
+  onComplete: () => void;
+  onError: (error: string) => void;
+}
+
+interface TaskStatusEvent {
+  status?: {
+    state?: string;
+    message?: {
+      parts?: Array<{
+        kind: string;
+        text?: string;
+        data?: {
+          type?: string;
+          name?: string;
+        };
+      }>;
+    };
+  };
+  final?: boolean;
+}
+
+export async function streamTask(
+  query: string,
+  callbacks: StreamCallbacks
+): Promise<void> {
   try {
     const client = await getClient();
 
-    const sendParams: MessageSendParams = {
+    const streamParams: MessageSendParams = {
       message: {
         messageId: uuidv4(),
         role: "user",
@@ -27,16 +54,41 @@ export async function sendMessage(query: string): Promise<string> {
       },
     };
 
-    const response = await client.sendMessage(sendParams);
-    const result = response as Message;
+    const stream = client.sendMessageStream(streamParams);
 
-    const textPart = result.parts.find((part) => part.kind === "text");
-    if (textPart && textPart.kind === "text") {
-      return textPart.text;
+    for await (const event of stream as AsyncIterable<TaskStatusEvent>) {
+      // Process message parts if present
+      if (event.status?.message?.parts) {
+        for (const part of event.status.message.parts) {
+          if (part.kind === "text" && part.text && part.text.length > 0) {
+            callbacks.onTextChunk(part.text);
+          } else if (
+            part.kind === "data" &&
+            part.data?.type === "tool_call" &&
+            part.data?.name
+          ) {
+            callbacks.onToolCall(part.data.name);
+          }
+        }
+      }
+
+      // Check for task completion or failure
+      if (event.final) {
+        if (event.status?.state === "failed") {
+          // Extract error message from parts if available
+          const errorText =
+            event.status.message?.parts
+              ?.filter((p) => p.kind === "text")
+              .map((p) => p.text)
+              .join("") || "Task failed";
+          callbacks.onError(errorText);
+        } else {
+          callbacks.onComplete();
+        }
+        break;
+      }
     }
-
-    return "";
   } catch (e) {
-    throw e;
+    callbacks.onError(e instanceof Error ? e.message : "Unknown error");
   }
 }
