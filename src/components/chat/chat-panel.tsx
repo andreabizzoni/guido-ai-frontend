@@ -3,8 +3,11 @@ import * as React from "react";
 import { cn } from "@/lib/utils";
 import { ChatMessages } from "./chat-messages";
 import { ChatInput } from "./chat-input";
+import { useChat } from "@/hooks/use-chat";
 
 function ChatPanel({ className, ...props }: React.ComponentProps<"div">) {
+  const { messages, isLoading, sendMessage } = useChat();
+
   return (
     <div
       data-slot="chat-panel"
@@ -14,8 +17,8 @@ function ChatPanel({ className, ...props }: React.ComponentProps<"div">) {
       )}
       {...props}
     >
-      <ChatMessages />
-      <ChatInput />
+      <ChatMessages messages={messages} />
+      <ChatInput onSend={sendMessage} isLoading={isLoading} />
     </div>
   );
 }
