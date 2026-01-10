@@ -1,5 +1,5 @@
-import { ClientFactory,  } from "@a2a-js/sdk/client";
-import type { Message, MessageSendParams } from '@a2a-js/sdk';
+import { ClientFactory } from "@a2a-js/sdk/client";
+import type { Message, MessageSendParams } from "@a2a-js/sdk";
 import { v4 as uuidv4 } from "uuid";
 
 const A2A_BACKEND_URL = "http://localhost:9999";
@@ -29,15 +29,14 @@ export async function sendMessage(query: string): Promise<string> {
 
     const response = await client.sendMessage(sendParams);
     const result = response as Message;
-    
+
     const textPart = result.parts.find((part) => part.kind === "text");
     if (textPart && textPart.kind === "text") {
       return textPart.text;
     }
-    
+
     return "";
   } catch (e) {
-    console.error('A2A Client Error:', e);
-    throw e; 
+    throw e;
   }
 }
